@@ -11,12 +11,11 @@ func main() {
 	newCache, err := cache.New[string](&cache.Config{
 		Poll: 5 * time.Second,
 		TTL:  10 * time.Second,
+		CLS:  true,
 	})
 	if err != nil {
 		return
 	}
-
-	// go newCache.Process()
 
 	newCache.Set(1, "one")
 	newCache.Set(2, "two")
@@ -25,6 +24,7 @@ func main() {
 
 	for _, key := range newCache.Keys() {
 		log.Println(newCache.Has(key))
-		log.Println(newCache.Get(key))
+		v, k := newCache.Get(key)
+		log.Println(v, k)
 	}
 }
