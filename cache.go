@@ -78,7 +78,7 @@ func (c *Cache[K, V]) Set(key K, value V) {
 	}
 }
 
-func (c *Cache[K, V]) Keys() []K {
+func (c *Cache[K, V]) keys() []K {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

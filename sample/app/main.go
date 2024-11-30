@@ -21,15 +21,8 @@ func main() {
 	newCache.Set(2, "two")
 	newCache.Set(3, "three")
 
-	log.Println(newCache.Keys())
-
-	for _, key := range newCache.Keys() {
-		log.Println(newCache.Has(key))
-		v, k := newCache.Get(key)
-		log.Println(v, k)
-	}
+	v, k := newCache.Get(1)
+	log.Println(v, k)
 
 	time.Sleep(3 * time.Second)
-
-	log.Println(newCache.Keys())
 }
