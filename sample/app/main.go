@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	newCache, err := cache.New[string](&cache.Config{
-		Poll: 5 * time.Second,
-		TTL:  10 * time.Second,
+	newCache, err := cache.New[int32, string](&cache.Config{
+		Poll: 50 * time.Millisecond,
+		TTL:  1000 * time.Millisecond,
 		CLS:  true,
 	})
 	if err != nil {
@@ -19,6 +19,7 @@ func main() {
 
 	newCache.Set(1, "one")
 	newCache.Set(2, "two")
+	newCache.Set(3, "three")
 
 	log.Println(newCache.Keys())
 
@@ -27,4 +28,8 @@ func main() {
 		v, k := newCache.Get(key)
 		log.Println(v, k)
 	}
+
+	time.Sleep(3 * time.Second)
+
+	log.Println(newCache.Keys())
 }

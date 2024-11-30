@@ -1,4 +1,2 @@
-github.com/kuroko-shirai/task v0.0.1 h1:PzLryQIyYUWmEewl5+2dQQVX4RAEyLV8uv/J1Ma3rew=
-github.com/kuroko-shirai/task v0.0.1/go.mod h1:lD2OcZhJxrUrHLWmAp2wzJ9gf1TWLQZr1pPWqIFEQJc=
-github.com/orcaman/concurrent-map/v2 v2.0.1 h1:jOJ5Pg2w1oeB6PeDurIYf6k9PQ+aTITr/6lP/L/zp6c=
-github.com/orcaman/concurrent-map/v2 v2.0.1/go.mod h1:9Eq3TG2oBe5FirmYWQfYO5iH1q0Jv47PLaNK++uCdOM=
+github.com/kuroko-shirai/task v0.0.4 h1:cBMxGrmmeLgptLAS3VhSBEnwogcl31nZVNkPgcIj+4A=
+github.com/kuroko-shirai/task v0.0.4/go.mod h1:lD2OcZhJxrUrHLWmAp2wzJ9gf1TWLQZr1pPWqIFEQJc=

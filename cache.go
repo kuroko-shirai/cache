@@ -2,101 +2,120 @@ package cache
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"github.com/kuroko-shirai/task"
-	cmap "github.com/orcaman/concurrent-map/v2"
+	// cmap "github.com/orcaman/concurrent-map/v2"
 )
 
-type Config struct {
-	Poll time.Duration // frequency of polling items in cache
-	TTL  time.Duration // items life-time in the cache
-	CLS  bool          // flag for clear cache
-}
+type Cache[K, V comparable] struct {
+	cm map[K]container[V] // cmap.ConcurrentMap[int32, container[T]]
 
-type Cache[T any] struct {
-	cm   cmap.ConcurrentMap[int32, container[T]]
 	ttl  time.Duration
 	poll time.Duration
+
+	mu sync.Mutex
 }
 
-type container[T any] struct {
-	value T
+type container[V any] struct {
+	value V
 	ttl   time.Time
 }
 
-func New[T any](config *Config) (*Cache[T], error) {
-	cm := cmap.NewWithCustomShardingFunction[int32, container[T]](func(key int32) uint32 {
-		return uint32(key)
-	})
+func New[K, V comparable](config *Config) (*Cache[K, V], error) {
+	cm := make(map[K]container[V])
 
-	newCache := &Cache[T]{
+	c := &Cache[K, V]{
 		cm:   cm,
 		ttl:  config.TTL,
 		poll: config.Poll,
+		mu:   sync.Mutex{},
 	}
 
 	if config.CLS {
-		newTask := task.New(
-			func(recovery any) {
-				log.Printf("got panic: %!w", recovery)
+		g := task.WithRecover(
+			func(r any, args ...any) {
+				log.Println("panic:", r)
 			},
-			func(cache *Cache[T]) func() {
-				return func() {
-					cache.process()
-				}
-			}(newCache),
 		)
-		newTask.Do()
+
+		g.Do(
+			func(c *Cache[K, V]) func() error {
+				return func() error {
+					for {
+						c.mu.Lock()
+						for key := range c.cm {
+							if time.Since(c.cm[key].ttl) > c.ttl {
+								delete(c.cm, key)
+							}
+						}
+						time.Sleep(c.poll)
+						c.mu.Unlock()
+					}
+				}
+			}(c),
+		)
+
+		go func() {
+			if err := g.Wait(); err != nil {
+				log.Printf("errors: %s", err.Error())
+			}
+		}()
 	}
 
-	return newCache, nil
+	return c, nil
 }
 
-func (cache *Cache[T]) Set(key int32, value T) {
-	cache.cm.Set(key, container[T]{
-		value: value,
-		ttl:   time.Now(),
+func (c *Cache[K, V]) Set(key K, value V) {
+	c.lock(func() {
+		c.cm[key] = container[V]{
+			value: value,
+			ttl:   time.Now(),
+		}
 	})
 }
 
-func (cache *Cache[T]) Keys() []int32 {
-	return cache.cm.Keys()
+func (c *Cache[K, V]) Keys() []K {
+	keys := make([]K, 0, len(c.cm))
+	c.lock(func() {
+		for key, _ := range c.cm {
+			keys = append(keys, key)
+		}
+	})
+
+	return keys
 }
 
-func (cache *Cache[T]) Get(key int32) (T, bool) {
-	if time.Since(cache.cm.Items()[key].ttl) <= cache.ttl {
-		cache.cm.Set(key, container[T]{
-			value: cache.cm.Items()[key].value,
+func (c *Cache[K, V]) Get(key K) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Since(c.cm[key].ttl) <= c.ttl {
+		c.cm[key] = container[V]{
+			value: c.cm[key].value,
 			ttl:   time.Now(),
-		})
-		item, ok := cache.cm.Get(key)
+		}
+
+		item, ok := c.cm[key]
 
 		return item.value, ok
 	}
 
-	return *new(T), false
-}
-
-// flush - removes an old element from the map by ttl.
-func (cache *Cache[T]) flush(key int32) {
-	if time.Since(cache.cm.Items()[key].ttl) > cache.ttl {
-		cache.cm.Remove(key)
-	}
+	return *new(V), false
 }
 
 // Has - looks up an item under specified key
-func (cache *Cache[T]) Has(key int32) bool {
-	return cache.cm.Has(key)
+func (c *Cache[K, V]) Has(key K) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	_, ok := c.cm[key]
+
+	return ok
 }
 
-// process -
-func (cache *Cache[T]) process() {
-	for {
-		for _, key := range cache.cm.Keys() {
-			cache.flush(key)
-		}
-
-		time.Sleep(cache.poll)
-	}
+func (c *Cache[K, V]) lock(f func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	f()
 }
