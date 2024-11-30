@@ -10,8 +10,8 @@ import (
 func main() {
 	newCache, err := cache.New[int32, string](&cache.Config{
 		TTL:  150 * time.Millisecond,
-		Size: 2,
-		CLS:  false,
+		Size: 10,
+		CLS:  true,
 	})
 	if err != nil {
 		return
@@ -23,13 +23,13 @@ func main() {
 
 	{
 		v, k := newCache.Get(1)
-		log.Println(v, k)
+		log.Println(v, k, newCache.Size())
 	}
 
 	time.Sleep(150 * time.Millisecond)
 
 	{
 		v, k := newCache.Get(1)
-		log.Println(v, k)
+		log.Println(v, k, newCache.Size())
 	}
 }

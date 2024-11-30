@@ -9,11 +9,11 @@ import (
 )
 
 type Cache[K, V comparable] struct {
-	cls bool
+	cls  bool
+	size int
+	ttl  time.Duration
 
 	cm map[K]container[V]
-
-	ttl time.Duration
 
 	mu sync.Mutex
 }
@@ -24,13 +24,14 @@ type container[V any] struct {
 }
 
 func New[K, V comparable](config *Config) (*Cache[K, V], error) {
-	cm := make(map[K]container[V])
+	cm := make(map[K]container[V], config.Size)
 
 	c := &Cache[K, V]{
-		cls: config.CLS,
-		cm:  cm,
-		ttl: config.TTL,
-		mu:  sync.Mutex{},
+		cls:  config.CLS,
+		size: config.Size,
+		ttl:  config.TTL,
+		cm:   cm,
+		mu:   sync.Mutex{},
 	}
 
 	if config.CLS {
@@ -96,8 +97,10 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 
 				return item.value, ok
 			}
+
 			return *new(V), false
 		}
+
 		return item.value, ok
 	}
 
@@ -112,4 +115,10 @@ func (c *Cache[K, V]) Has(key K) bool {
 	_, ok := c.cm[key]
 
 	return ok
+}
+
+func (c *Cache[K, V]) Size() int {
+	c.size = len(c.cm)
+
+	return c.size
 }
