@@ -3,10 +3,8 @@ package cache
 import "time"
 
 type Config struct {
-	Size int
+	CLS  bool // flag for clear cache
+	Size int  // size of service's cache
 
-	Poll time.Duration // frequency of polling items in cache
-	TTL  time.Duration // items life-time in the cache
-
-	CLS bool // flag for clear cache
+	TTL time.Duration // items life-time in the cache
 }

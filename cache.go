@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"errors"
 	"log"
 	"sync"
 	"time"
@@ -10,10 +9,11 @@ import (
 )
 
 type Cache[K, V comparable] struct {
+	cls bool
+
 	cm map[K]container[V]
 
-	ttl  time.Duration
-	poll time.Duration
+	ttl time.Duration
 
 	mu sync.Mutex
 }
@@ -26,15 +26,11 @@ type container[V any] struct {
 func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 	cm := make(map[K]container[V])
 
-	if config.CLS && config.TTL <= config.Poll {
-		return nil, errors.New("the polling frequency should not exceed the lifetime of the cache entry")
-	}
-
 	c := &Cache[K, V]{
-		cm:   cm,
-		ttl:  config.TTL,
-		poll: config.Poll,
-		mu:   sync.Mutex{},
+		cls: config.CLS,
+		cm:  cm,
+		ttl: config.TTL,
+		mu:  sync.Mutex{},
 	}
 
 	if config.CLS {
@@ -54,7 +50,6 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 								delete(c.cm, key)
 							}
 						}
-						time.Sleep(c.poll)
 						c.mu.Unlock()
 					}
 				}
@@ -94,14 +89,15 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if time.Since(c.cm[key].ttl) <= c.ttl {
-		c.cm[key] = container[V]{
-			value: c.cm[key].value,
-			ttl:   time.Now(),
+	if item, ok := c.cm[key]; ok {
+		if c.cls {
+			if time.Since(item.ttl) <= c.ttl {
+				c.Set(key, item.value)
+
+				return item.value, ok
+			}
+			return *new(V), false
 		}
-
-		item, ok := c.cm[key]
-
 		return item.value, ok
 	}
 
