@@ -1,16 +1,16 @@
 package cache
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/kuroko-shirai/task"
-	// cmap "github.com/orcaman/concurrent-map/v2"
 )
 
 type Cache[K, V comparable] struct {
-	cm map[K]container[V] // cmap.ConcurrentMap[int32, container[T]]
+	cm map[K]container[V]
 
 	ttl  time.Duration
 	poll time.Duration
@@ -25,6 +25,10 @@ type container[V any] struct {
 
 func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 	cm := make(map[K]container[V])
+
+	if config.CLS && config.TTL <= config.Poll {
+		return nil, errors.New("the polling frequency should not exceed the lifetime of the cache entry")
+	}
 
 	c := &Cache[K, V]{
 		cm:   cm,
@@ -68,21 +72,20 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 }
 
 func (c *Cache[K, V]) Set(key K, value V) {
-	c.lock(func() {
-		c.cm[key] = container[V]{
-			value: value,
-			ttl:   time.Now(),
-		}
-	})
+	c.cm[key] = container[V]{
+		value: value,
+		ttl:   time.Now(),
+	}
 }
 
 func (c *Cache[K, V]) Keys() []K {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	keys := make([]K, 0, len(c.cm))
-	c.lock(func() {
-		for key, _ := range c.cm {
-			keys = append(keys, key)
-		}
-	})
+	for key := range c.cm {
+		keys = append(keys, key)
+	}
 
 	return keys
 }
@@ -90,6 +93,7 @@ func (c *Cache[K, V]) Keys() []K {
 func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	if time.Since(c.cm[key].ttl) <= c.ttl {
 		c.cm[key] = container[V]{
 			value: c.cm[key].value,
@@ -112,10 +116,4 @@ func (c *Cache[K, V]) Has(key K) bool {
 	_, ok := c.cm[key]
 
 	return ok
-}
-
-func (c *Cache[K, V]) lock(f func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	f()
 }

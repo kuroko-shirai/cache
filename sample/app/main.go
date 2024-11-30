@@ -10,7 +10,7 @@ import (
 func main() {
 	newCache, err := cache.New[int32, string](&cache.Config{
 		Poll: 50 * time.Millisecond,
-		TTL:  1000 * time.Millisecond,
+		TTL:  100 * time.Millisecond,
 		CLS:  true,
 	})
 	if err != nil {
