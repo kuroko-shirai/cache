@@ -8,12 +8,18 @@ import (
 	"github.com/kuroko-shirai/task"
 )
 
+const (
+	WithRewritting = iota
+	WithCancelling
+)
+
 type Cache[K, V comparable] struct {
 	cls  bool
 	size int
 	ttl  time.Duration
 
 	cm map[K]container[V]
+	tm slice[K]
 
 	mu sync.Mutex
 }
@@ -25,12 +31,14 @@ type container[V any] struct {
 
 func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 	cm := make(map[K]container[V], config.Size)
+	tm := make(slice[K], 0, config.Size)
 
 	c := &Cache[K, V]{
 		cls:  config.CLS,
 		size: config.Size,
 		ttl:  config.TTL,
 		cm:   cm,
+		tm:   tm,
 		mu:   sync.Mutex{},
 	}
 
@@ -49,6 +57,8 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 						for key := range c.cm {
 							if time.Since(c.cm[key].ttl) > c.ttl {
 								delete(c.cm, key)
+
+								c.tm.delete(key)
 							}
 						}
 						c.mu.Unlock()
@@ -58,9 +68,7 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 		)
 
 		go func() {
-			if err := g.Wait(); err != nil {
-				log.Printf("errors: %s", err.Error())
-			}
+			g.Wait()
 		}()
 	}
 
@@ -68,10 +76,14 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 }
 
 func (c *Cache[K, V]) Set(key K, value V) {
+	t := time.Now()
+
 	c.cm[key] = container[V]{
 		value: value,
-		ttl:   time.Now(),
+		ttl:   t,
 	}
+
+	c.tm.append(key)
 }
 
 func (c *Cache[K, V]) keys() []K {
@@ -93,6 +105,8 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	if item, ok := c.cm[key]; ok {
 		if c.cls {
 			if time.Since(item.ttl) <= c.ttl {
+				c.tm.delete(key)
+
 				c.Set(key, item.value)
 
 				return item.value, ok
@@ -101,7 +115,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 			return *new(V), false
 		}
 
-		return item.value, ok
+		return item.value, true
 	}
 
 	return *new(V), false

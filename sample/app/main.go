@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -32,4 +33,10 @@ func main() {
 		v, k := newCache.Get(1)
 		log.Println(v, k, newCache.Size())
 	}
+
+	fmt.Println(">c", newCache.Has(1))
+
+	time.Sleep(150 * time.Millisecond)
+
+	fmt.Println(">c", newCache.Has(1))
 }
