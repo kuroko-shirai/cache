@@ -1,11 +1,10 @@
 package cache
 
 import (
-	"log"
 	"sync"
 	"time"
 
-	"github.com/kuroko-shirai/task"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -43,13 +42,9 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 	}
 
 	if config.CLS {
-		g := task.WithRecover(
-			func(r any, args ...any) {
-				log.Println("panic:", r)
-			},
-		)
+		eg := new(errgroup.Group)
 
-		g.Do(
+		eg.Go(
 			func(c *Cache[K, V]) func() error {
 				return func() error {
 					for {
@@ -57,10 +52,9 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 						for key := range c.cm {
 							if time.Since(c.cm[key].ttl) > c.ttl {
 								delete(c.cm, key)
-
-								c.tm.delete(key)
 							}
 						}
+
 						c.mu.Unlock()
 					}
 				}
@@ -68,7 +62,7 @@ func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 		)
 
 		go func() {
-			g.Wait()
+			eg.Wait()
 		}()
 	}
 
