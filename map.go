@@ -1,9 +1,12 @@
 package cache
 
 import (
-	"sync"
+	"bytes"
+	"encoding/gob"
+	"hash/fnv"
 	"time"
 
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -13,63 +16,54 @@ type ct[V any] struct {
 	ttl time.Time
 }
 
-type cmap[K, V comparable] struct {
+type mt[K comparable, V any] struct {
 	cls  bool
 	ttl  time.Duration
 	size int
 
-	m map[K]ct[V]
-
-	mu  sync.Mutex
-	smu sync.Mutex
+	m cmap.ConcurrentMap[K, ct[V]]
 }
 
 func newCMap[K, V comparable](
 	size int,
 	ttl time.Duration,
-) *cmap[K, V] {
+) *mt[K, V] {
 	cls := false
 	if ttl != time.Duration(0) {
 		cls = true
 	}
 
-	return &cmap[K, V]{
+	return &mt[K, V]{
 		cls:  cls,
 		ttl:  ttl,
 		size: size,
-		m:    make(map[K]ct[V], size),
-		mu:   sync.Mutex{},
-		smu:  sync.Mutex{},
+		m: cmap.NewWithCustomShardingFunction[K, ct[V]](func(key K) uint32 {
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			if err := enc.Encode(key); err != nil {
+				panic(err)
+			}
+			h := fnv.New32()
+			h.Write(buf.Bytes())
+			return h.Sum32()
+		}),
 	}
 }
 
-func (c *cmap[K, V]) Keys() []K {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	keys := make([]K, 0, len(c.m))
-	for key := range c.m {
+func (c *mt[K, V]) Keys() []K {
+	keys := make([]K, 0, c.m.Count())
+	for key := range c.m.Items() {
 		keys = append(keys, key)
 	}
 
 	return keys
 }
 
-func (c *cmap[K, V]) Set(key K, value V) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.put(key, value)
-}
-
-func (c *cmap[K, V]) Get(key K) (V, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+func (c *mt[K, V]) Get(key K) (V, bool) {
 	if c.cls {
-		if item, ok := (c.m)[key]; ok {
+		if item, ok := c.m.Get(key); ok {
 			if time.Since(item.ttl) <= c.ttl {
-				c.put(key, item.value)
+				c.Set(key, item.value)
 
 				return item.value, ok
 			}
@@ -77,18 +71,18 @@ func (c *cmap[K, V]) Get(key K) (V, bool) {
 
 		return *new(V), false
 	}
-	item, ok := (c.m)[key]
+	item, ok := c.m.Get(key)
 
 	return item.value, ok
 }
 
-func (c *cmap[K, V]) min() (K, bool) {
+func (c *mt[K, V]) min() (K, bool) {
 	var minKey K
 	var minValue ct[V]
 
 	first := true
 	found := false
-	for key, value := range c.m {
+	for key, value := range c.m.Items() {
 		if first || value.ttl.Before(minValue.ttl) {
 			minKey = key
 			minValue = value
@@ -100,45 +94,38 @@ func (c *cmap[K, V]) min() (K, bool) {
 	return minKey, found
 }
 
-func (c *cmap[K, V]) put(key K, value V) {
+func (c *mt[K, V]) Set(key K, value V) {
 	ttl := time.Now()
 
 	if c.size != 0 {
-		if len(c.m) > c.size {
+		if c.m.Count() > c.size {
 			minKey, found := c.min()
 			if found {
-				delete(c.m, minKey)
+				c.m.Remove(minKey)
 			}
 		}
 	}
 
-	c.m[key] = ct[V]{
+	c.m.Set(key, ct[V]{
 		value: value,
 		ttl:   ttl,
-	}
+	})
 }
 
-func (c *cmap[K, V]) Process() {
+func (c *mt[K, V]) Process() {
 	if c.cls {
 		eg := new(errgroup.Group)
 
 		eg.Go(
-			func(c *cmap[K, V]) func() error {
+			func(c *mt[K, V]) func() error {
 				return func() error {
 					for {
-						c.smu.Lock()
-
 						for _, key := range c.Keys() {
-							c.mu.Lock()
-
-							if time.Since((c).m[key].ttl) > c.ttl {
-								delete((c).m, key)
+							item, _ := c.m.Get(key)
+							if time.Since(item.ttl) > c.ttl {
+								c.m.Remove(key)
 							}
-
-							c.mu.Unlock()
 						}
-
-						c.smu.Unlock()
 					}
 				}
 			}(c),
