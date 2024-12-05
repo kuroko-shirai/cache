@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -8,29 +9,31 @@ import (
 )
 
 func main() {
-	newCache, err := cache.New[int32, string](&cache.Config{
+	newCache, err := cache.New[int, string](&cache.Config{
 		TTL:  150 * time.Millisecond,
-		Size: 10,
+		Size: 5,
 		CLS:  true,
 	})
 	if err != nil {
 		return
 	}
 
-	newCache.Set(1, "one")
-	newCache.Set(2, "two")
-	newCache.Set(3, "three")
+	for i := range 10 {
+		newCache.Set(i, fmt.Sprintf("worker-%d", i))
+	}
 
 	{
 		v, k := newCache.Get(1)
-		log.Println(v, k, newCache.Size())
+		log.Println(v, k)
+		v, k = newCache.Get(7)
+		log.Println(v, k)
 	}
 
 	time.Sleep(150 * time.Millisecond)
 
 	{
-		v, k := newCache.Get(1)
-		log.Println(v, k, newCache.Size())
+		v, k := newCache.Get(7)
+		log.Println(v, k)
 	}
 
 	time.Sleep(150 * time.Millisecond)
