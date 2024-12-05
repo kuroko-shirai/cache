@@ -33,6 +33,12 @@ This approach allows controlling the cache size. However,
 the user can also allow an unlimited cache size. In this
 case, the `Size` parameter should be equal to `0`.
 
+Also, note that when accessing a record in the cache by its
+key, the ttl of that record will be updated to the time of
+access. This allows the cache to retain records that are
+actively being accessed and remove those that are not being
+used.
+
 This minimalist design allows the user to store arbitrary
 keys and data in the cache. To write an element to the
 cache, add the following code:
