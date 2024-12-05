@@ -13,7 +13,7 @@ type Cache[K, V comparable] struct {
 func New[K, V comparable](config *Config) (*Cache[K, V], error) {
 	var s st[K, V]
 
-	s = newCMap[K, V](config.Size, config.CLS, config.TTL)
+	s = newCMap[K, V](config.Size, config.TTL)
 
 	c := &Cache[K, V]{
 		s: s,

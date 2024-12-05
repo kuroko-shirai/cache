@@ -26,9 +26,13 @@ type cmap[K, V comparable] struct {
 
 func newCMap[K, V comparable](
 	size int,
-	cls bool,
 	ttl time.Duration,
 ) *cmap[K, V] {
+	cls := false
+	if ttl != time.Duration(0) {
+		cls = true
+	}
+
 	return &cmap[K, V]{
 		cls:  cls,
 		ttl:  ttl,

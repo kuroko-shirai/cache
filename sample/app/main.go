@@ -12,7 +12,6 @@ func main() {
 	newCache, err := cache.New[int, string](&cache.Config{
 		TTL:  150 * time.Millisecond,
 		Size: 5,
-		CLS:  true,
 	})
 	if err != nil {
 		return
